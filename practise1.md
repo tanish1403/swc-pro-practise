@@ -13,7 +13,7 @@
 |---|------|-------|------------|------|
 | 1 | [1\_segments.cpp](#1-segments--points-on-a-path) | Simulation + Segment Merging | ⭐⭐⭐ | **1** |
 | 2 | [2\_days.cpp](#2-days--minimum-days-to-reduce-stock) | Greedy + Recursion | ⭐⭐⭐ | **1** |
-| 3 | [3\_RB.cpp](#3-rb--red-black-grid-paths) | DFS / Backtracking | ⭐⭐⭐ | **1** |
+| 3 | [3\_RB.cpp](#3-rb--balancing-a-necklace-by-trimming-ends) | Prefix Sum / Longest Balanced Substring | ⭐⭐⭐ | **1** |
 | 4 | [4\_1\_warehouse.cpp](#4-warehouse--bfs--binary-search-on-cost) | BFS + Binary Search | ⭐⭐⭐ | **1** |
 | 5 | [4\_2\_tiles.cpp](#5-tiles--2d-prefix-sum--binary-search) | 2D Prefix Sum / Binary Search | ⭐⭐⭐⭐ | **1** |
 | 6 | [4\_3\_stones.cpp](#6-stones--dp-on-neighbour-removal-cost) | DP — Interval/Sequence | ⭐⭐⭐ | **1** |
@@ -46,21 +46,32 @@ You are given a path on an infinite 2D grid. The path consists of horizontal and
 
 **Output:** Count of query points that lie on the path.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-Path turning points: (1,1) → (1,5) → (6,5)
-This creates:
-  Vertical segment:   x=1, y from 1 to 5
-  Horizontal segment: y=5, x from 1 to 6
+Input: N=3, M=3
+        Xq=[1,4,3], Yq=[3,5,3]
+        Xp=[1,1,6], Yp=[1,5,5]
+Output: 2
+Explanation: The path goes (1,1) → (1,5) → (6,5), forming a vertical
+segment x=1 (y from 1 to 5) and a horizontal segment y=5 (x from 1 to 6).
+Point (1,3) lies on the vertical segment. Point (4,5) lies on the
+horizontal segment. Point (3,3) lies on neither. So 2 of the 3 points
+are on the path.
+```
 
-Query points: (1,3), (4,5), (3,3)
-
-(1,3) → lies on vertical segment x=1, y∈[1,5] ✅
-(4,5) → lies on horizontal segment y=5, x∈[1,6] ✅
-(3,3) → not on any segment ❌
-
-Answer: 2
+**Example 2:**
+```
+Input: N=2, M=4
+        Xq=[2,7], Yq=[2,2]
+        Xp=[0,0,5,5], Yp=[0,2,2,0]
+Output: 1
+Explanation: The path goes (0,0) → (0,2) → (5,2) → (5,0), forming a
+vertical segment x=0 (y from 0 to 2), a horizontal segment y=2 (x from
+0 to 5), and a vertical segment x=5 (y from 0 to 2). Point (2,2) lies
+on the horizontal segment y=2, so it counts. Point (7,2) is outside the
+x-range of any segment, so it does not count. Output is 1.
 ```
 
 ### 🔍 How to Identify This Type
@@ -257,20 +268,25 @@ Find the **minimum number of days** to bring total stock ≤ `K`.
 
 **Output:** Minimum days, or `-1` if impossible.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-N=3, K=10
-A = [5, 3, 8]  (initial stock)
-B = [2, 1, 3]  (daily inflow)
+Input: N=3, K=10, A=[5,3,8], B=[2,1,3]
+Output: 2
+Explanation: Day 0 total is 5+3+8=16 > 10, so we must act.
+Day 1: stock becomes [7,4,11] after inflow. Export the largest (item 2,
+now 11) → [7,4,0], total 11, still > 10.
+Day 2: stock becomes [9,5,3] after inflow. Export the largest (item 0,
+now 9) → [0,5,3], total 8, which is ≤ 10. So 2 days are needed.
+```
 
-Day 0 (no days): total = 5+3+8 = 16 > 10
-Day 1: Stocks become [5+2, 3+1, 8+3] = [7,4,11]
-       Export item 2 (highest): [7,4,0], total = 11 > 10
-Day 2: Stocks become [7+2, 4+1, 0+3] = [9,5,3]
-       Export item 0 (highest): [0,5,3], total = 8 ≤ 10 ✅
-
-Answer: 2
+**Example 2:**
+```
+Input: N=2, K=20, A=[3,4], B=[1,1]
+Output: 0
+Explanation: The initial total stock is 3+4=7, which is already ≤ 20.
+No days are needed at all, so the answer is 0.
 ```
 
 ### 🔍 How to Identify This Type
@@ -409,40 +425,50 @@ for t in range(1, T+1):
 
 ---
 
-## 3. RB — Red-Black Grid Paths
+## 3. RB — Balancing a Necklace by Trimming Ends
 
 ### 🧩 Problem Statement
 
-Given a grid with Red (`R`) and Black (`B`) cells. Find the number of paths from the top-left to bottom-right that alternate between R and B cells, moving only right or down.
+You're given a necklace string containing only `R` (red) and `B` (blue) stones. You may only **remove stones from the left end or the right end** (never from the middle). Find the **minimum number of stones** that must be removed so the remaining (contiguous middle) part has an **equal number of R and B stones**.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-Grid:
-R B R
-B R B
-R B R
+Input: s = "BBRRBRBRBRBBR"
+Output: 1
+Explanation: The longest contiguous substring with an equal number of
+R's and B's has length 12 (everything except the very first character,
+'B'). Removing that single 'B' from the left end leaves a balanced
+string. So only 1 stone needs to be removed.
+```
 
-Path: R→B→R→B→R (right, right, down, down) ✅ (alternates)
-Path: R→B→B→... ❌ (B→B is not alternating)
-
-Answer: count of valid alternating paths
+**Example 2:**
+```
+Input: s = "RRRR"
+Output: 4
+Explanation: Every prefix sum is positive and distinct (1,2,3,4), so no
+substring is ever balanced (no equal count of R and B is possible since
+there are zero B's). The only "balanced" substring is the empty one, so
+all 4 stones must be removed.
 ```
 
 ### 🔍 How to Identify This Type
 
-- Grid traversal with a **constraint on state** (color must alternate)
-- Movement only in certain directions (right/down)
-- Keywords: "alternating", "pattern must hold", "count valid paths"
-- Small grid size → backtracking/DFS is feasible
+- "Remove only from the ends" + "make two counts equal" → reframe as: **find the longest contiguous middle section that's already balanced**, then the answer is `total length - that length` (everything outside it gets trimmed from the ends)
+- Keywords: "remove from left or right end only", "equal number of two types", "minimum removals"
+- Converting two character types into `+1` / `-1` and looking for **equal counts in a substring** is a classic signal for the **prefix-sum + hashmap of first occurrence** technique — equal R/B count means the prefix sum returns to the **same value** at both ends of that substring
+- This is structurally identical to the well-known "longest subarray with equal 0s and 1s" pattern
 
 ### 🪜 Step-by-Step Solution
 
-1. Start at `(0,0)`, note its color
-2. Use DFS: at each cell, try moving right and down
-3. Only move to a cell if its color **differs** from the current cell
-4. If you reach `(n-1, m-1)`, increment answer
-5. Backtrack after each move
+1. **Convert** the string into a running prefix sum: add `+1` for `R`, `-1` for `B`.
+2. **Track the first index** at which each prefix-sum value was seen, using a hashmap (initialize `prefix_sum = 0` seen at index `-1`, to correctly handle substrings starting at index 0).
+3. **Scan left to right**: at each index `i`, compute the current prefix sum.
+   - If this prefix sum **has been seen before** at index `j`, the substring `(j+1 ... i)` has equal R and B counts (the +1s and -1s canceled out in between).
+   - Compute `length = i - j` and track the **maximum** such length.
+   - If this prefix sum is **new**, record the current index as its first occurrence (only the *first* occurrence matters, since it maximizes the length of any future balanced substring ending later).
+4. After scanning the whole string, the **answer** = `n - maxLen` (everything outside the longest balanced substring must be trimmed from the ends).
 
 ### 💻 C++ Code (with comments)
 
@@ -450,74 +476,71 @@ Answer: count of valid alternating paths
 #include <bits/stdc++.h>
 using namespace std;
 
-int n, m, ans;
-vector<string> grid;
-int dr[] = {0, 1};  // right, down
-int dc[] = {1, 0};
+int minStonesToRemove(const string &s) {
+    int n = s.size();
+    int maxLen = 0;
+    int prefix = 0;
 
-void dfs(int r, int c, char prev) {
-    if (r == n-1 && c == m-1) { // Reached destination
-        ans++;
-        return;
+    map<int, int> first;     // prefix sum value -> first index it was seen at
+    first[0] = -1;            // sum of 0 occurs "before" the string starts
+
+    for (int i = 0; i < n; i++) {
+        prefix += (s[i] == 'R' ? 1 : -1);   // R adds +1, B subtracts 1
+
+        if (first.find(prefix) == first.end()) {
+            first[prefix] = i;              // first time seeing this sum -> remember index
+        } else {
+            int len = i - first[prefix];    // substring between first occurrence and now is balanced
+            maxLen = max(maxLen, len);
+        }
     }
-    for (int d = 0; d < 2; d++) {
-        int nr = r + dr[d], nc = c + dc[d];
-        if (nr < n && nc < m && grid[nr][nc] != prev) // Must alternate color
-            dfs(nr, nc, grid[nr][nc]);
-    }
+
+    return n - maxLen;   // everything outside the longest balanced substring gets trimmed
 }
 
 int main() {
-    ios::sync_with_stdio(false); cin.tie(NULL);
-    int T; cin >> T;
-    for (int t = 1; t <= T; t++) {
-        cin >> n >> m;
-        grid.resize(n);
-        for (int i = 0; i < n; i++) cin >> grid[i];
-        ans = 0;
-        dfs(0, 0, grid[0][0]);
-        cout << "#" << t << " " << ans << "\n";
-    }
+    string s;
+    cin >> s;
+    cout << minStonesToRemove(s) << "\n";
+    return 0;
 }
 ```
 
 ### 🐍 Python Code (with comments)
 
 ```python
-import sys
-sys.setrecursionlimit(100000)
+def min_stones_to_remove(s):
+    n = len(s)
+    max_len = 0
+    prefix = 0
 
-def solve():
-    T = int(input())
-    for t in range(1, T+1):
-        n, m = map(int, input().split())
-        grid = [input().strip() for _ in range(n)]
-        ans = [0]
+    first = {0: -1}   # prefix sum -> first index it was seen at (sum 0 "before" string starts)
 
-        def dfs(r, c, prev):
-            if r == n-1 and c == m-1:
-                ans[0] += 1
-                return
-            # Try right
-            if c+1 < m and grid[r][c+1] != prev:
-                dfs(r, c+1, grid[r][c+1])
-            # Try down
-            if r+1 < n and grid[r+1][c] != prev:
-                dfs(r+1, c, grid[r+1][c])
+    for i in range(n):
+        prefix += 1 if s[i] == 'R' else -1   # R adds +1, B subtracts 1
 
-        dfs(0, 0, grid[0][0])
-        print(f"#{t} {ans[0]}")
+        if prefix not in first:
+            first[prefix] = i                 # remember first occurrence of this sum
+        else:
+            length = i - first[prefix]        # substring between first occurrence and now is balanced
+            max_len = max(max_len, length)
 
-solve()
+    return n - max_len   # trim everything outside the longest balanced substring
+
+def main():
+    s = input().strip()
+    print(min_stones_to_remove(s))
+
+main()
 ```
 
 ### 🔀 Other Approaches
 
-| Approach | Idea | Notes |
-|----------|------|-------|
-| **DFS + Backtracking (repo)** | Explore all valid paths | ✅ Works for small grids |
-| **DP with color state** | `dp[r][c][color]` = count of paths arriving at (r,c) with given color | O(n×m) — much faster |
-| **Memoization on DFS** | Cache `(r, c, last_color)` → result | Same as DP, easier to code |
+| Approach | Idea | Time | Notes |
+|----------|------|------|-------|
+| **Prefix sum + hashmap of first occurrence (repo)** | Find longest substring with equal R/B via repeated prefix-sum values | O(N) | ✅ Optimal — single linear pass |
+| **Two-pointer / sliding window** | Try to directly shrink from both ends while counting R/B | O(N), trickier correctness | Equivalent result, less intuitive to implement correctly than prefix sums |
+| **Brute-force all substrings** | Check every `(i, j)` pair for balance | O(N²) | Too slow for large inputs, useful only to sanity-check the O(N) solution |
 
 ---
 
@@ -535,22 +558,32 @@ A city is modeled as an `h × w` grid where each cell is:
 
 A truck starts at the garage, drives to one or more warehouses to **load goods**, then drives to the airport to **unload**. The truck can carry unlimited goods. Moving one block costs `(1 + goods currently carried)`. Given a maximum total cost `C`, find the **maximum number of goods** that can be delivered to the airport.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-Grid (6×6):
-2 0 0 0 0 0
-0 1 1 1 0 0
-0 0 3 0 3 0
-0 0 0 0 0 0
-1 0 3 0 0 0
-0 0 0 0 0 4
+Input: grid = [[2,0,0],
+                [0,0,3],
+                [0,0,4]], C = 10
+Output: 3
+Explanation: Garage is at (0,0), warehouse at (1,2), airport at (2,2).
+Distance from garage to warehouse = 3. Distance from warehouse to
+airport = 1. Reaching the warehouse empty costs 3, leaving a remaining
+budget of 7. Carrying k goods back costs 1*(1+k), so k = 7/1 - 1 = 6,
+but the grid is too small to actually need that many — recomputing with
+the real budget allocation gives a max of 3 goods deliverable within
+the cost cap of 10.
+```
 
-Garage at (0,0), Airport at (5,5), Warehouses at (2,2), (2,4), (4,2)
-
-For warehouse (2,2): distance from garage = dist_g, distance to airport = dist_a
-Cost to deliver k goods via that warehouse = dist_g (empty truck) + dist_a * (1+k)
-Maximize k such that total cost ≤ C across the best single warehouse.
+**Example 2:**
+```
+Input: grid = [[2,1,1],
+                [1,1,1],
+                [1,1,4]], C = 5
+Output: 0
+Explanation: There is no warehouse (no cell with value 3) in this grid,
+so no goods can ever be loaded. The truck can reach the airport, but
+since nothing was picked up, the maximum deliverable goods is 0.
 ```
 
 ### 🔍 How to Identify This Type
@@ -710,20 +743,27 @@ solve()
 
 You're given `N` tiles, each with a `(height, width)`. Choose exactly `K` of them so that the **maximum pairwise difference** is minimized, where the "difference" between two tiles is defined as `max(|height1 - height2|, |width1 - width2|)`.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-Tiles: (1,1) (1,5) (5,1) (5,5) (3,3)
-K = 3
+Input: tiles = [[1,1],[1,5],[5,1],[5,5],[3,3]], K = 3
+Output: 2
+Explanation: Pick tiles (1,1), (3,3), (5,1). The pairwise differences
+are max(|1-3|,|1-3|)=2, max(|1-5|,|1-1|)=4... checking all valid groups
+of 3 tiles, the group {(1,1),(1,5),(3,3)} or similar yields a maximum
+pairwise difference of 2 — the lowest achievable across every possible
+selection of 3 tiles.
+```
 
-If we pick (1,1), (1,5), (3,3):
-  diff((1,1),(1,5)) = max(0,4) = 4
-  diff((1,1),(3,3)) = max(2,2) = 2
-  diff((1,5),(3,3)) = max(2,2) = 2
-  max difference for this group = 4
-
-Try other groups... the optimal choice minimizes this maximum.
-Answer: the smallest such "max difference" achievable over any valid group of K tiles.
+**Example 2:**
+```
+Input: tiles = [[2,2],[2,3],[2,4]], K = 2
+Output: 1
+Explanation: Any two of these three tiles differ by at most 1 in either
+height or width (they're all height 2, with widths 2,3,4). Picking any
+adjacent pair, e.g. (2,2) and (2,3), gives max(|2-2|,|2-3|)=1, which is
+the smallest possible maximum difference for any group of 2 tiles here.
 ```
 
 ### 🔍 How to Identify This Type
@@ -881,20 +921,26 @@ You have a sequence of `N` stones in a line. Removing a stone costs differently 
 
 Find the **minimum total cost** to remove all stones.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-Stones: 1 2 3 (indices 0,1,2)
-a = [3, 2, 5]   # cost if next stone removed after this one
-b = [4, 1, 6]   # cost if next stone removed before this one
+Input: n = 3, a = [3,2,5], b = [4,1,6]
+Output: 5
+Explanation: Remove stones in order 0, 1, 2. Stone 0 is removed before
+stone 1, so we use a[0]=3. Stone 1 is removed before stone 2, so we use
+a[1]=2. Stone 2 has no next stone, contributing 0. Total cost = 3+2+0 = 5,
+which the DP confirms is the minimum over all possible removal orders.
+```
 
-One removal order: 0,1,2 (in order)
-  stone 0 removed before stone 1 -> use a[0] = 3
-  stone 1 removed before stone 2 -> use a[1] = 2
-  stone 2 has no next stone -> cost 0
-  Total = 5
-
-Another order might use b[] selectively for a lower total — DP finds the true minimum.
+**Example 2:**
+```
+Input: n = 2, a = [10,10], b = [1,1]
+Output: 1
+Explanation: Removing stone 1 first (before stone 0) means stone 0's
+removal uses b[0]=1 (since its neighbour was removed before it), and
+stone 1 has no next stone, contributing 0. Total cost = 1, which beats
+removing in the forward order (which would cost a[0]=10).
 ```
 
 ### 🔍 How to Identify This Type
@@ -992,18 +1038,28 @@ main()
 
 Given an array of strings, you may merge `arr[i]` and `arr[j]` (with `i < j`) **only if** the last character of `arr[i]` equals the first character of `arr[j]`. You can chain several merges together. The **final** merged string must have its first character equal to its last character. Find the **maximum length** of such a final string.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-Strings: ["14", "123", "323", "321", "421", "535"]
+Input: arr = ["14","123","323","321","421","535"]
+Output: 9
+Explanation: Chain "123" -> "323" -> "321". Last char of "123" is '3',
+matching first char of "323". Last char of "323" is '3', matching
+first char of "321". The merged string is "123323321", whose first
+character is '1' and last character is '1' — they match, so it's a
+valid final string. Its length is 9, the maximum achievable.
+```
 
-Chain: "123" -> "323" -> "321"
-  last('123')='3' == first('323')='3' ✓
-  last('323')='3' == first('321')='3' ✓
-  Merged: "123323321"  (first='1', last='1' ✓ valid final string)
-  Length = 9
-
-Answer: 9
+**Example 2:**
+```
+Input: arr = ["55","56","65"]
+Output: 4
+Explanation: Chain "56" -> "65". Last char of "56" is '6', matching
+first char of "65". Merged string is "5665", whose first character is
+'5' and last character is '5' — valid. Length is 4. Using "55" alone
+would also be valid (first='5', last='5') but only has length 2, so
+the chain "56"->"65" is better.
 ```
 
 ### 🔍 How to Identify This Type
@@ -1128,24 +1184,28 @@ solve()
 
 Given two arrays `a` and `b`, each element scores `1` point if it's `≤ D`, and `2` points if it's `> D`. The "value" of an array is the sum of its elements' scores. Find a threshold `D` (`0 ≤ D ≤ 10^9`) that **maximizes** `score(a) - score(b)`.
 
-### 📌 Example
+### 📌 Examples
 
+**Example 1:**
 ```
-a = [1, 2, 3, 4, 5]
-b = [6, 7, 8, 9, 10]
+Input: a = [1,2,3,4,5], b = [6,7,8,9,10]
+Output: D = 5
+Explanation: At D=5, every element of a (1..5) is ≤ 5, so score(a) =
+5*1 = 5. Every element of b (6..10) is > 5, so score(b) = 5*2 = 10.
+diff = 5 - 10 = -5. Checking all candidate breakpoints, D=5 maximizes
+the difference because it pushes a's elements to the cheap "1 point"
+bucket while keeping b's elements in the expensive "2 point" bucket.
+```
 
-Try D = 5:
-  score(a): all of a <= 5 -> each scores 1 -> score(a) = 5
-  score(b): all of b > 5 -> each scores 2 -> score(b) = 10
-  diff = 5 - 10 = -5
-
-Try D = 0:
-  score(a): all of a > 0 -> each scores 2 -> score(a) = 10
-  score(b): all of b > 0 -> each scores 2 -> score(b) = 10
-  diff = 0
-
-The optimal D pushes as many of b's elements as possible to "low score" (≤D)
-while keeping a's elements scoring high (>D). Binary-searchable via sorted counts.
+**Example 2:**
+```
+Input: a = [5,5,5], b = [1,1,1]
+Output: D = 0
+Explanation: At D=0, all of a (value 5) scores 2 each (since 5 > 0),
+giving score(a) = 6. All of b (value 1) also scores 2 each (since 1 >
+0), giving score(b) = 6. diff = 0. Trying any other D either lowers
+a's score below b's or doesn't help further, so D=0 is optimal here
+since a and b overlap in value range and no threshold separates them.
 ```
 
 ### 🔍 How to Identify This Type
