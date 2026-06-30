@@ -12,13 +12,13 @@
 | # | File | Topic | Difficulty |
 |---|------|-------|------------|
 | 9 | [6\_1\_cars.cpp](#9-cars--simultaneous-parking-parity--triangular-numbers) | Math — Parity + Triangular Numbers | ⭐⭐⭐ |
-| 10 | [7\_1\_robot.cpp](#10-robot--grid-bfs-simulation) | BFS / Grid Simulation | ⭐⭐ |
-| 11 | [7\_2\_digit\_sum.cpp](#11-digit-sum--math) | Math / Number Theory | ⭐⭐ |
+| 10 | [7\_1\_robot.cpp](#10-robot--garbage-cleaning-with-deployment-cost-dp) | DP — Index + Last-Deploy State | ⭐⭐⭐ |
+| 11 | [7\_2\_digit\_sum.cpp](#11-digit-sum--counting-numbers-with-a-target-digit-sum-digit-dp) | Digit DP | ⭐⭐⭐⭐ |
 | 12 | [min\_subset\_diff.cpp](#12-minimum-subset-difference--dp) | DP — Subset/Partition | ⭐⭐⭐⭐ |
 | 13 | [apples.cpp](#13-apples--0-1-bfs-with-direction-state) | 0-1 BFS / Grid + Direction State | ⭐⭐⭐⭐ |
 | 14 | [logging\_trees.cpp](#14-logging-trees--greedy--dp-on-tree-lengths) | Greedy + DP on positions | ⭐⭐⭐⭐ |
 | 15 | [soldiers.cpp](#15-soldiers--tree-dfs-with-greedy-subtree-balancing) | Tree DFS / Greedy on subtree sums | ⭐⭐⭐ |
-| 16 | [min\_cost.cpp](#16-minimum-cost--dp) | Dynamic Programming — Grid Path | ⭐⭐⭐ |
+| 16 | [min\_cost.cpp](#16-minimum-cost--tree-rerooting-to-maximize-weighted-distance-sum) | Tree Rerooting Technique | ⭐⭐⭐⭐ |
 
 ---
 
@@ -190,44 +190,196 @@ main()
 ---
 
 ---
-## 10. Robot — Grid BFS Simulation
+## 10. Robot — Garbage Cleaning with Deployment Cost DP
 
 ### 🧩 Problem Statement
 
-A robot starts at a position on a grid. Given a sequence of commands (move forward, turn left, turn right), simulate the robot's movement and find its final position, or count cells visited.
+You're given an array where each index `i` holds a garbage value. **Deploying a robot** at any index costs a fixed amount `m`. A deployed robot can clean the garbage at its current index, then **only move forward** (from `i` to `i+1`), and at every step the "cost" of moving past an index is the amount of **garbage still uncleaned there** (so it pays for every dirty cell it walks past while it's "skipping" instead of stopping). You may deploy any number of robots at any indices. Find the **minimum total cost** to clean all the garbage.
 
 ### 📌 Example
 
 ```
-Grid: 5×5, Robot starts at (2,2) facing North
-Commands: F F R F L F
+Garbage: 3 1 4 1 5
+m = 2
 
-Step by step:
-  (2,2)→N: F → (1,2)
-  (1,2)→N: F → (0,2)
-  (0,2)→N: R → now facing East
-  (0,2)→E: F → (0,3)
-  (0,3)→E: L → now facing North
-  (0,3)→N: F → out of bounds? → stay or wrap depending on rules
+One robot deployed at index 0, cleaning everything as it goes forward:
+  Deploy cost: 2
+  It cleans index 0 (3), 1 (1), 2 (4), 3 (1), 4 (5) as it passes — no extra "skip" cost
+  Total = 2 + (cleaning costs handled by the DP's own cost model)
 
-Answer: final position / visited count
+The DP balances: "deploy a NEW robot here" (pay m, reset the trailing skip-cost window)
+versus "let an earlier robot's skipped garbage cost accumulate as it passes by."
+
+Answer: 8
 ```
 
 ### 🔍 How to Identify This Type
 
-- Robot/agent moving on a grid with direction state
-- Commands: Forward, Turn Left, Turn Right
-- Keywords: "simulate", "robot", "commands", "direction"
-- State = `(row, col, direction)` — always track direction!
+- "Deploying/starting something costs a fixed price, after which it only moves forward and incurs cost based on what it passes" → this is a **DP over (current position, position of the last deployment/reset point)**
+- Keywords: "deploy at any index for cost m", "can only move forward", "minimum total cost to clean everything"
+- The key state needed isn't just "where am I in the array" — it's also **"where did the most recent robot last get deployed,"** because that determines how much accumulated "passing-by garbage cost" is owed for the stretch since then
+- At every position you face a **binary choice**: deploy a brand-new robot here (reset the cost accumulator, pay `m`) or let the current robot's trailing window keep growing (accumulate `(current_index - last_deploy_index) * garbage[current_index]`)
 
 ### 🪜 Step-by-Step Solution
 
-1. Define direction arrays: `dr = [-1,0,1,0]`, `dc = [0,1,0,-1]` for N,E,S,W
-2. Use `dir` index (0=N, 1=E, 2=S, 3=W)
-3. Turn right: `dir = (dir+1) % 4`
-4. Turn left: `dir = (dir+3) % 4`
-5. Move forward: `(r,c) → (r+dr[dir], c+dc[dir])`, check bounds
-6. Track visited set if needed
+1. Define `solve(i, last)` = minimum additional cost to finish cleaning indices `i..n-1`, given that the **most recent robot deployment** happened at index `last`.
+2. **Base case**: if `i == n`, no more garbage to handle, return `0`.
+3. **Two choices** at index `i`:
+   - **Deploy a new robot here**: pay `m`, and the new "last deploy" position becomes `i` → `m + solve(i+1, i)`.
+   - **Don't deploy here**: the existing robot (deployed at `last`) is still responsible for this cell; the cost of "passing over" this garbage is `(i - last) * garbage[i]` → `(i - last) * garbage[i] + solve(i+1, last)`.
+4. Take the **minimum** of these two options.
+5. **Memoize** on `(i, last)` to avoid recomputation — there are at most `N²` states.
+6. Skip leading indices with zero garbage (no need to deploy a robot before the first dirty cell).
+7. **Answer** = `m + solve(first_dirty_index + 1, first_dirty_index)` (you must deploy at least one robot, placed right at the first dirty index).
+
+### 💻 C++ Code (with comments)
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+using ll = long long;
+
+const int MAXN = 1e5 + 1;
+ll dp[20][MAXN];     // dp[i][last] = min cost to finish from index i, last deploy at 'last'
+ll m, n;
+vector<ll> A;
+
+// Min cost to clean indices [in..n-1], given the active robot was last deployed at index 'l'
+ll solve(int in, int l) {
+    if (in == n) return 0;                 // nothing left to clean
+    if (dp[in][l] != -1) return dp[in][l];
+
+    // Option A: deploy a brand-new robot at index 'in' (pay m, reset window)
+    ll deployHere = (ll)m + solve(in + 1, in);
+
+    // Option B: let the existing robot (deployed at 'l') keep going;
+    // pay for the garbage at 'in' weighted by how far it is from the last deploy point
+    ll keepGoing = (ll)(in - l) * A[in] + solve(in + 1, l);
+
+    dp[in][l] = min(deployHere, keepGoing);
+    return dp[in][l];
+}
+
+int main() {
+    n = 20;     // example fixed size matching the repo's hardcoded test
+    m = 100;
+    A = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};   // garbage values
+    memset(dp, -1, sizeof(dp));
+
+    int i = 0;
+    for (; i < n; i++) {
+        if (A[i] != 0) break;     // find first index with garbage
+    }
+
+    if (i == n) {
+        cout << 0 << endl;        // no garbage anywhere
+    } else {
+        ll ans = m + solve(i + 1, i);   // must deploy a robot at the first dirty index
+        cout << ans << "\n";
+    }
+    return 0;
+}
+```
+
+### 🐍 Python Code (with comments)
+
+```python
+import sys
+sys.setrecursionlimit(20000)
+
+def solve_garbage(garbage, m):
+    n = len(garbage)
+    memo = {}
+
+    def solve(i, last):
+        """Min cost to clean indices i..n-1, given the active robot's last deploy was at 'last'."""
+        if i == n:
+            return 0
+        if (i, last) in memo:
+            return memo[(i, last)]
+
+        # Option A: deploy a new robot at index i (pay m, reset the window)
+        deploy_here = m + solve(i + 1, i)
+
+        # Option B: existing robot keeps going; pay for garbage at i weighted by distance from last deploy
+        keep_going = (i - last) * garbage[i] + solve(i + 1, last)
+
+        result = min(deploy_here, keep_going)
+        memo[(i, last)] = result
+        return result
+
+    # Find first index with garbage
+    first_dirty = next((idx for idx, g in enumerate(garbage) if g != 0), n)
+
+    if first_dirty == n:
+        return 0   # no garbage at all
+
+    return m + solve(first_dirty + 1, first_dirty)   # must deploy at the first dirty index
+
+def main():
+    garbage = [1]*20   # example matching the repo's hardcoded test
+    m = 100
+    print(solve_garbage(garbage, m))
+
+main()
+```
+
+### 🔀 Other Approaches
+
+| Approach | Idea | Time | Notes |
+|----------|------|------|-------|
+| **DP over (index, last deploy point) (repo)** | Binary choice per index: deploy fresh or extend current robot's reach | O(N²) | ✅ Matches problem structure directly |
+| **Greedy "deploy whenever cost exceeds m"** | Heuristic: deploy a new robot once accumulated passing-cost would exceed `m` | — | Tempting but not always optimal — doesn't account for future garbage density |
+| **DP forward with cost-so-far instead of last-index** | Track accumulated cost directly instead of the index of last deployment | Same complexity | Equivalent reformulation, sometimes easier to reason about for variable garbage patterns |
+
+---
+
+---
+## 11. Digit Sum — Counting Numbers with a Target Digit Sum (Digit DP)
+
+### 🧩 Problem Statement
+
+A company issues gift certificates with unique numeric serial numbers. Given a maximum serial number `A` (which can be **enormous** — up to 10^100, so it must be handled as a string) and a target digit-sum `S`, find **how many numbers from 1 to A** have digits that sum to exactly `S`. Return the count **modulo 10^9 + 7**.
+
+### 📌 Example
+
+```
+A = 101, S = 3
+Valid numbers ≤ 101 with digit sum 3: 3, 12, 21, 30
+Answer: 4
+
+A = 172, S = 3
+Valid numbers ≤ 172 with digit sum 3: 3, 12, 21, 30, 102, 111, 120
+Answer: 7
+
+A = 999, S = 500
+Max possible digit sum for a 3-digit number is 9+9+9 = 27, far below 500
+Answer: 0
+```
+
+### 🔍 How to Identify This Type
+
+- "Count numbers ≤ N satisfying some digit-based property" + "N can be astronomically large (up to 10^100)" → this is the classic signature of **Digit DP**, since you clearly cannot iterate from 1 to A directly
+- Keywords: "digit sum", "count numbers up to A", "modulo", numbers given as **strings** rather than integers (a strong hint that they exceed normal integer ranges)
+- The state needed is **(current digit position, remaining digit-sum budget, whether we're still "tight" against A's prefix)** — the "tight" flag is what lets you respect the upper bound `A` without enumerating every number
+- If you see "given A as a string" combined with "find count/sum of numbers with property X," digit DP is almost always the intended technique
+
+### 🪜 Step-by-Step Solution
+
+1. Represent `A` as a **string** of digits (since it can have up to 100 digits).
+2. Define `solve(pos, remSum, tight)`:
+   - `pos` = which digit position we're currently filling (left to right)
+   - `remSum` = how much of the target digit-sum `S` is still "left to distribute" among remaining digits
+   - `tight` = whether the digits chosen so far exactly match `A`'s prefix (constraining what digits are still allowed)
+3. **Base cases**:
+   - If `remSum < 0` at any point, this branch is invalid → return `0`.
+   - If `pos == length(A)`, we've placed every digit — it's valid only if `remSum == 0` exactly.
+4. **Transition**: at each position, the maximum digit you're allowed to place is `9` normally, but only up to `A[pos]` if `tight` is still true (you can't exceed `A`'s own digit at this position while still being "tight").
+5. For each allowed digit `d` from `0` to that limit:
+   - Recurse into `solve(pos+1, remSum - d, tight && (d == limit))`.
+   - Sum up all these recursive results (mod `10^9+7`).
+6. **Memoize** on `(pos, remSum, tight)` to avoid recomputation — note that once `tight` becomes `false`, results no longer depend on `A`'s actual digits, so they're highly cacheable.
+7. **Answer** = `solve(0, S, true)` (start at position 0, full budget `S`, fully tight against `A`).
 
 ### 💻 C++ Code (with comments)
 
@@ -235,181 +387,94 @@ Answer: final position / visited count
 #include <bits/stdc++.h>
 using namespace std;
 
-// Directions: 0=North, 1=East, 2=South, 3=West
-int dr[] = {-1, 0, 1, 0};
-int dc[] = {0, 1, 0, -1};
+const int MOD = 1e9 + 7;
+
+// pos = current digit position, remSum = digit-sum budget left, tight = still bounded by A's prefix
+int solve(int pos, int remSum, bool tight, const string &A, vector<vector<vector<int>>> &dp) {
+    if (remSum < 0) return 0;                 // overshot the target sum -> invalid
+    if (pos == (int)A.size()) return remSum == 0;  // valid only if sum used up exactly
+
+    if (dp[pos][remSum][tight] != -1) return dp[pos][remSum][tight];
+
+    int limit = tight ? (A[pos] - '0') : 9;    // can't exceed A's digit here while tight
+    int ans = 0;
+
+    for (int digit = 0; digit <= limit; digit++) {
+        // Still tight only if we used the maximum allowed digit at this position
+        ans = (ans + solve(pos + 1, remSum - digit, tight && (digit == limit), A, dp)) % MOD;
+    }
+
+    return dp[pos][remSum][tight] = ans;
+}
 
 int main() {
-    ios::sync_with_stdio(false); cin.tie(NULL);
-    int T; cin >> T;
-    for (int t = 1; t <= T; t++) {
-        int n, m, r, c, dir;
-        cin >> n >> m >> r >> c >> dir;  // grid size, start pos, start direction
-        string commands; cin >> commands;
+    string A;
+    int S;
+    cin >> A >> S;
 
-        set<pair<int,int>> visited;
-        visited.insert({r, c});
+    int n = A.size();
+    // dp[position][remaining_sum][tight_flag], -1 means "not computed yet"
+    vector<vector<vector<int>>> dp(n + 1, vector<vector<int>>(S + 1, vector<int>(2, -1)));
 
-        for (char cmd : commands) {
-            if (cmd == 'F') {                      // Move forward
-                int nr = r + dr[dir], nc = c + dc[dir];
-                if (nr >= 0 && nr < n && nc >= 0 && nc < m) {
-                    r = nr; c = nc;                // Only move if in bounds
-                    visited.insert({r, c});
-                }
-            } else if (cmd == 'R') {               // Turn right
-                dir = (dir + 1) % 4;
-            } else if (cmd == 'L') {               // Turn left
-                dir = (dir + 3) % 4;              // +3 mod 4 = -1 mod 4
-            }
-        }
-
-        cout << "#" << t << " " << visited.size() << "\n";
-    }
+    cout << solve(0, S, 1, A, dp) << endl;
+    return 0;
 }
 ```
 
 ### 🐍 Python Code (with comments)
 
 ```python
-def solve():
-    T = int(input())
-    # Directions: 0=North, 1=East, 2=South, 3=West
-    dr = [-1, 0, 1, 0]
-    dc = [0, 1, 0, -1]
+import sys
+sys.setrecursionlimit(10000)
 
-    for t in range(1, T+1):
-        n, m, r, c, d = map(int, input().split())
-        commands = input().strip()
+MOD = 10**9 + 7
 
-        visited = {(r, c)}
+def count_with_digit_sum(A, S):
+    n = len(A)
+    memo = {}
 
-        for cmd in commands:
-            if cmd == 'F':              # Move forward in current direction
-                nr, nc = r + dr[d], c + dc[d]
-                if 0 <= nr < n and 0 <= nc < m:
-                    r, c = nr, nc
-                    visited.add((r, c))
-            elif cmd == 'R':            # Turn right
-                d = (d + 1) % 4
-            elif cmd == 'L':            # Turn left
-                d = (d + 3) % 4
+    def solve(pos, rem_sum, tight):
+        # rem_sum < 0 means we've already exceeded the target -> dead end
+        if rem_sum < 0:
+            return 0
+        if pos == n:
+            return 1 if rem_sum == 0 else 0   # valid only if sum used exactly
 
-        print(f"#{t} {len(visited)}")
+        key = (pos, rem_sum, tight)
+        if key in memo:
+            return memo[key]
 
-solve()
+        limit = int(A[pos]) if tight else 9   # bounded by A's digit only while still tight
+
+        total = 0
+        for digit in range(0, limit + 1):
+            still_tight = tight and (digit == limit)
+            total = (total + solve(pos + 1, rem_sum - digit, still_tight)) % MOD
+
+        memo[key] = total
+        return total
+
+    return solve(0, S, True)
+
+def main():
+    A = input().strip()
+    S = int(input())
+    print(count_with_digit_sum(A, S))
+
+main()
 ```
 
 ### 🔀 Other Approaches
 
-| Approach | Idea | Notes |
-|----------|------|-------|
-| **Direct simulation (above)** | Follow commands step by step | ✅ Standard approach |
-| **BFS variant** | If obstacles exist, use BFS to navigate | More complex |
-| **2D prefix sums** | For counting visits in regions | Overkill here |
+| Approach | Idea | Time | Notes |
+|----------|------|------|-------|
+| **Digit DP with (pos, sum, tight) state (repo)** | Standard digit DP memoized recursion | O(len(A) × S × 2) | ✅ Optimal — handles A up to 10^100 digits easily |
+| **Iterative digit DP (bottom-up)** | Same states, filled iteratively instead of recursively | Same complexity | Avoids recursion depth concerns for very long A |
+| **Combinatorics / stars-and-bars with digit caps** | Count digit-sequences summing to S using inclusion-exclusion on digit caps (0-9 per position), then subtract those exceeding A | Same complexity, more intricate math | Useful alternative when "tight" recursion feels unintuitive; same underlying idea expressed differently |
 
 ---
 
 ---
-
-## 11. Digit Sum — Math
-
-### 🧩 Problem Statement
-
-Given a number `N`, repeatedly replace it with the sum of its digits until a single digit remains. Find that single digit (also called the **digital root**).
-
-### 📌 Example
-
-```
-N = 9875
-Step 1: 9+8+7+5 = 29
-Step 2: 2+9 = 11
-Step 3: 1+1 = 2
-
-Answer: 2
-```
-
-### 🔍 How to Identify This Type
-
-- "Sum of digits", "repeat until single digit", "digital root"
-- Often combined with modular arithmetic
-- Samsung sometimes asks: find the Nth number whose digit sum equals K
-
-### 🪜 Step-by-Step Solution
-
-**Mathematical shortcut (digital root formula):**
-- If `N == 0`: answer is 0
-- If `N % 9 == 0`: answer is 9
-- Else: answer is `N % 9`
-
-### 💻 C++ Code (with comments)
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
-// Brute force: sum digits repeatedly
-int digitSumBrute(long long n) {
-    while (n >= 10) {           // Keep going until single digit
-        long long s = 0;
-        while (n > 0) {
-            s += n % 10;        // Add last digit
-            n /= 10;
-        }
-        n = s;
-    }
-    return n;
-}
-
-// O(1) mathematical formula
-int digitalRoot(long long n) {
-    if (n == 0) return 0;
-    return (n % 9 == 0) ? 9 : n % 9;
-}
-
-int main() {
-    ios::sync_with_stdio(false); cin.tie(NULL);
-    int T; cin >> T;
-    for (int t = 1; t <= T; t++) {
-        long long n; cin >> n;
-        cout << "#" << t << " " << digitalRoot(n) << "\n";
-    }
-}
-```
-
-### 🐍 Python Code (with comments)
-
-```python
-def digital_root(n):
-    """O(1) formula: digital root of n."""
-    if n == 0:
-        return 0
-    return 9 if n % 9 == 0 else n % 9
-
-def digit_sum_brute(n):
-    """Brute force: keep summing digits."""
-    while n >= 10:
-        n = sum(int(d) for d in str(n))
-    return n
-
-T = int(input())
-for t in range(1, T+1):
-    n = int(input())
-    print(f"#{t} {digital_root(n)}")
-```
-
-### 🔀 Other Approaches
-
-| Approach | Time | Notes |
-|----------|------|-------|
-| **Brute force loop** | O(log N per step) | Simple, works fine |
-| **Digital root formula** | O(1) | ✅ Best — always use this |
-| **String manipulation** | O(digits) per step | Slightly slower than math |
-
----
-
----
-
 ## 12. Minimum Subset Difference — DP
 
 ### 🧩 Problem Statement
@@ -1025,128 +1090,195 @@ solve()
 ---
 
 ---
-## 16. Minimum Cost — DP
+## 16. Minimum Cost — Tree Rerooting to Maximize Weighted Distance Sum
 
 ### 🧩 Problem Statement
 
-Given a grid of costs, find the path from top-left `(0,0)` to bottom-right `(n-1,m-1)` with **minimum total cost**. You can move right, down, or diagonally down-right.
+You're given a tree with `n` vertices, where each vertex `i` has a value `a[i]` written on it. The distance between two vertices is the number of edges on the path between them. **Choose a vertex `v`** such that `d₁×a₁ + d₂×a₂ + ... + dₙ×aₙ` is **maximized**, where `dᵢ` is the distance from vertex `i` to your chosen `v`. Print this maximum value.
 
 ### 📌 Example
 
 ```
-Grid:
-1  3  1
-1  5  1
-4  2  1
+Tree (4 nodes): 1-2, 2-3, 2-4
+Values: a[1]=1, a[2]=2, a[3]=3, a[4]=4
 
-Paths (right/down/diagonal):
-(0,0)→(0,1)→(0,2)→(1,2)→(2,2): 1+3+1+1+1 = 7
-(0,0)→(1,0)→(2,0)→(2,1)→(2,2): 1+1+4+2+1 = 9
-(0,0)→(0,1)→(1,1)→(2,1)→(2,2): 1+3+5+2+1 = 12
-(0,0)→(1,1)→(2,2):              1+5+1 = 7  (diagonal)
-(0,0)→(0,1)→(0,2)→(1,2)→(2,2): 1+3+1+1+1 = 7
+If v = 1:
+  d(1,1)=0, d(2,1)=1, d(3,1)=2, d(4,1)=2
+  Sum = 0*1 + 1*2 + 2*3 + 2*4 = 0+2+6+8 = 16
 
-Minimum: 7
+If v = 3:
+  d(1,3)=2, d(2,3)=1, d(3,3)=0, d(4,3)=2
+  Sum = 2*1 + 1*2 + 0*3 + 2*4 = 2+2+0+8 = 12
+
+Trying all 4 vertices as the root and taking the best gives the maximum —
+rerooting technique computes this for every vertex in O(n) total instead
+of recomputing each from scratch.
 ```
 
 ### 🔍 How to Identify This Type
 
-- Grid problem asking for minimum/maximum path cost
-- Movement restricted to certain directions
-- Keywords: "minimum cost", "path", "grid", "top-left to bottom-right"
-- Classic **Grid DP** pattern
+- "Try every vertex as a reference point, compute a sum involving distances, take the best" → naively this is `O(n)` per vertex × `n` vertices = `O(n²)`, which is too slow for large trees; the fix is the **rerooting (re-rooting) technique**, computing all answers in a single `O(n)` pass after one initial DFS
+- Keywords: "choose a vertex to maximize/minimize a distance-weighted sum", "tree with values on vertices", "for every possible root"
+- The key insight: when you move the "root" from a parent `u` to one of its children `c`, the contribution of every node **changes by a predictable formula** based on the subtree sizes/sums — you don't need to recompute distances from scratch
+- This is a well-known competitive programming pattern; recognizing the phrase "answer for every vertex as root" should immediately suggest **DFS + reroot in O(n)**, not "DP on a grid" or anything resembling shortest-path/Dijkstra
 
 ### 🪜 Step-by-Step Solution
 
-1. Define `dp[i][j]` = minimum cost to reach cell `(i,j)`
-2. Base: `dp[0][0] = grid[0][0]`
-3. First row: can only come from left → `dp[0][j] = dp[0][j-1] + grid[0][j]`
-4. First col: can only come from above → `dp[i][0] = dp[i-1][0] + grid[i][0]`
-5. General: `dp[i][j] = grid[i][j] + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])`
-6. Answer: `dp[n-1][m-1]`
+1. **Root the tree arbitrarily** (say at vertex `1`) and run a first DFS (`precalc`) that computes, for every node:
+   - `subtree_sum[node]` = sum of `a[i]` over the entire subtree rooted at `node`.
+   - `dist[node]` = the weighted distance sum **if `node` were the root**, computed bottom-up: `dist[node] = Σ over children c (dist[c] + subtree_sum[c])` (every value in child `c`'s subtree is one edge further away than it was from `c`'s own perspective).
+2. After this first DFS, `dist[1]` (the actual root) holds the correct weighted sum **only for vertex 1**. Every other vertex's value is still wrong — it was computed only from the rooted-tree perspective, not as if that vertex were the actual root.
+3. **Reroot** with a second DFS that "moves" the root one edge at a time:
+   - When moving the root from `node` to a child `x`, **temporarily remove `x`'s contribution from `node`**, then **add `node`'s (modified) contribution to `x`**, since now everything in `node`'s side of the tree is one edge **farther** from `x`, while everything in `x`'s own original subtree is one edge **closer**.
+   - This update is `O(1)` per edge, so the whole rerooting DFS is `O(n)`.
+   - After updating `x`'s values, recurse into `x`'s children, then **undo the update** (backtrack) so `node`'s values are restored correctly for exploring its other children.
+4. Track the **maximum** `dist[node]` seen across all nodes during the reroot DFS.
+5. **Answer** = that maximum.
 
 ### 💻 C++ Code (with comments)
 
 ```cpp
 #include <bits/stdc++.h>
 using namespace std;
+typedef long long ll;
+
+const int MAXN = 2e5 + 1;
+vector<ll> values(MAXN);
+vector<ll> g[MAXN];                       // adjacency list
+vector<ll> subtree_sum(MAXN), dist(MAXN); // per-node subtree sum and weighted distance sum
+ll maxi = 0;
+
+// First DFS: compute subtree sums and the weighted-distance-sum AS IF rooted at node 1
+void precalc(int node, int parent) {
+    subtree_sum[node] = values[node];
+    dist[node] = 0;
+
+    for (auto &x : g[node]) {
+        if (x != parent) {
+            precalc(x, node);
+            subtree_sum[node] += subtree_sum[x];
+            // Everything in child x's subtree is one edge further from 'node' than from 'x'
+            dist[node] += (dist[x] + subtree_sum[x]);
+        }
+    }
+}
+
+// Second DFS: reroot from 'node' to each child, updating dist[] in O(1) per edge
+void reroot(int node, int parent) {
+    maxi = max(maxi, dist[node]);   // candidate answer if 'node' were chosen as v
+
+    for (auto &x : g[node]) {
+        if (x != parent) {
+            // Temporarily detach child x's old contribution from node
+            subtree_sum[node] -= subtree_sum[x];
+            dist[node] -= (dist[x] + subtree_sum[x]);
+
+            // Attach node's (now child-x-free) contribution onto x instead
+            subtree_sum[x] += subtree_sum[node];
+            dist[x] += (dist[node] + subtree_sum[node]);
+
+            reroot(x, node);   // recurse with x as the new "root perspective"
+
+            // Undo: restore node's original values before processing its next child
+            subtree_sum[x] -= subtree_sum[node];
+            dist[x] -= (dist[node] + subtree_sum[node]);
+            subtree_sum[node] += subtree_sum[x];
+            dist[node] += (dist[x] + subtree_sum[x]);
+        }
+    }
+}
 
 int main() {
-    ios::sync_with_stdio(false); cin.tie(NULL);
-    int T; cin >> T;
-    for (int t = 1; t <= T; t++) {
-        int n, m; cin >> n >> m;
-        vector<vector<int>> g(n, vector<int>(m));
-        for (int i=0;i<n;i++) for (int j=0;j<m;j++) cin >> g[i][j];
+    ios_base::sync_with_stdio(false); cin.tie(NULL);
 
-        vector<vector<int>> dp(n, vector<int>(m, INT_MAX));
-        dp[0][0] = g[0][0];
-
-        // Fill first row (only from left)
-        for (int j=1;j<m;j++) dp[0][j] = dp[0][j-1] + g[0][j];
-        // Fill first col (only from above)
-        for (int i=1;i<n;i++) dp[i][0] = dp[i-1][0] + g[i][0];
-
-        // Fill rest: take minimum of left, above, diagonal
-        for (int i=1;i<n;i++) {
-            for (int j=1;j<m;j++) {
-                int best = min({dp[i-1][j],    // from above
-                                dp[i][j-1],    // from left
-                                dp[i-1][j-1]}); // from diagonal
-                dp[i][j] = g[i][j] + best;
-            }
-        }
-
-        cout << "#" << t << " " << dp[n-1][m-1] << "\n";
+    int n; cin >> n;
+    for (int i = 1; i <= n; i++) cin >> values[i];
+    for (int i = 0; i < n - 1; i++) {
+        int x, y; cin >> x >> y;
+        g[x].push_back(y);
+        g[y].push_back(x);
     }
+
+    precalc(1, -1);   // root arbitrarily at vertex 1
+    reroot(1, -1);     // propagate to find the true maximum over all possible roots
+
+    cout << maxi << endl;
+    return 0;
 }
 ```
 
 ### 🐍 Python Code (with comments)
 
 ```python
+import sys
+sys.setrecursionlimit(300000)
+
 def solve():
-    T = int(input())
-    for t in range(1, T+1):
-        n, m = map(int, input().split())
-        g = [list(map(int, input().split())) for _ in range(n)]
+    n = int(input())
+    values = [0] + [int(input()) for _ in range(n)]   # 1-indexed
+    # NOTE: if values are given on one line, replace the above with:
+    # values = [0] + list(map(int, input().split()))
 
-        dp = [[float('inf')] * m for _ in range(n)]
-        dp[0][0] = g[0][0]
+    g = [[] for _ in range(n + 1)]
+    for _ in range(n - 1):
+        x, y = map(int, input().split())
+        g[x].append(y)
+        g[y].append(x)
 
-        # First row: can only come from left
-        for j in range(1, m):
-            dp[0][j] = dp[0][j-1] + g[0][j]
-        # First column: can only come from above
-        for i in range(1, n):
-            dp[i][0] = dp[i-1][0] + g[i][0]
+    subtree_sum = [0] * (n + 1)
+    dist = [0] * (n + 1)
 
-        # Fill remaining cells
-        for i in range(1, n):
-            for j in range(1, m):
-                best = min(dp[i-1][j],    # above
-                           dp[i][j-1],    # left
-                           dp[i-1][j-1])  # diagonal
-                dp[i][j] = g[i][j] + best
+    def precalc(node, parent):
+        subtree_sum[node] = values[node]
+        dist[node] = 0
+        for x in g[node]:
+            if x != parent:
+                precalc(x, node)
+                subtree_sum[node] += subtree_sum[x]
+                # Child x's whole subtree is one edge farther from 'node' than from 'x'
+                dist[node] += dist[x] + subtree_sum[x]
 
-        print(f"#{t} {dp[n-1][m-1]}")
+    max_val = [0]
+
+    def reroot(node, parent):
+        max_val[0] = max(max_val[0], dist[node])
+
+        for x in g[node]:
+            if x != parent:
+                # Detach x's contribution from node
+                subtree_sum[node] -= subtree_sum[x]
+                dist[node] -= dist[x] + subtree_sum[x]
+
+                # Attach node's remaining contribution onto x
+                subtree_sum[x] += subtree_sum[node]
+                dist[x] += dist[node] + subtree_sum[node]
+
+                reroot(x, node)
+
+                # Undo, restoring node's state for its next child
+                subtree_sum[x] -= subtree_sum[node]
+                dist[x] -= dist[node] + subtree_sum[node]
+                subtree_sum[node] += subtree_sum[x]
+                dist[node] += dist[x] + subtree_sum[x]
+
+    precalc(1, -1)
+    reroot(1, -1)
+    print(max_val[0])
 
 solve()
 ```
 
 ### 🔀 Other Approaches
 
-| Approach | Idea | Notes |
-|----------|------|-------|
-| **Grid DP (above)** | Classic O(N×M) DP | ✅ Optimal |
-| **Dijkstra** | Treat grid as weighted graph | O(NM log NM) — overkill unless weights are non-uniform |
-| **DFS + Memoization** | Top-down recursion with cache | Same as DP, slightly more overhead |
-| **Space-optimised DP** | Keep only 1 row at a time | O(M) space instead of O(NM) |
+| Approach | Idea | Time | Notes |
+|----------|------|------|-------|
+| **Rerooting technique (repo)** | One DFS to compute base values, second DFS to propagate root changes in O(1) per edge | O(n) | ✅ Optimal — the standard technique for "answer for every root" tree problems |
+| **Brute force: BFS/DFS from every vertex** | For each candidate `v`, run BFS to get all distances, compute the weighted sum directly | O(n²) | Correct but far too slow for large `n`; fine for sanity-checking the rerooting logic on small trees |
+| **Centroid-based reasoning** | Use properties of the tree's centroid to bound or estimate the optimal vertex | — | Not directly applicable here since we need the exact maximum over all vertices, not just an estimate |
 
 ---
 
 ---
-
 ## 📝 Quick Pattern Recognition Guide
 
 | If the problem says... | Think... |
